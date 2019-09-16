@@ -28,6 +28,10 @@ class TopicController:
         self.cluster: "Cluster" = cluster
         self.config = config
 
+    def get_cluster_topic(self, topic_name: str) -> Topic:
+        """Convenience function getting an existing topic based on topic_name"""
+        return self.update_from_cluster(Topic(topic_name))
+
     @raise_for_kafka_exception
     def _get_client_topic(self, topic_name: str, client_type: ClientTypes) -> ClientType:
         confluent_topics = self.cluster.confluent_client.list_topics(topic=topic_name, timeout=10).topics
@@ -60,17 +64,24 @@ class TopicController:
 
     @raise_for_kafka_exception
     @invalidate_cache_after
-    def create_topics(self, topics: List[Topic]):
+    def create_topics(self, topics: List[Topic], template=None):
         for topic in topics:
-            partitions = topic.num_partitions if topic.num_partitions is not None else self.config.default_partitions
-            replicas = (
-                topic.replication_factor
-                if topic.replication_factor is not None
-                else self.config.default_replication_factor
-            )
-            new_topic = NewTopic(
-                topic.name, num_partitions=partitions, replication_factor=replicas, config=topic.config
-            )
+            if template:
+                template_config = self.get_cluster_topic(template)
+                partitions = template_config.num_partitions
+                replicas = template_config.replication_factor
+                config = template_config.config
+            else:
+                partitions = (
+                    topic.num_partitions if topic.num_partitions is not None else self.config.default_partitions
+                )
+                replicas = (
+                    topic.replication_factor
+                    if topic.replication_factor is not None
+                    else self.config.default_replication_factor
+                )
+                config = topic.config
+            new_topic = NewTopic(topic.name, num_partitions=partitions, replication_factor=replicas, config=config)
             future_list = self.cluster.confluent_client.create_topics([new_topic])
             ensure_kafka_futures_done(list(future_list.values()))
 
@@ -87,10 +98,6 @@ class TopicController:
     def delete_topic(self, topic: Topic):
         future = self.cluster.confluent_client.delete_topics([topic.name])[topic.name]
         ensure_kafka_futures_done([future])
-
-    def get_cluster_topic(self, topic_name: str) -> Topic:
-        """Convenience function getting an existing topic based on topic_name"""
-        return self.update_from_cluster(Topic(topic_name))
 
     @raise_for_kafka_exception
     def update_from_cluster(self, topic: Topic):

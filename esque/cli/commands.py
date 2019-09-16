@@ -97,14 +97,15 @@ def ctx(state, context):
 @create.command("topic")
 @click.argument("topic-name", required=True)
 @no_verify_option
+@click.option("-l", "--like", help="Topic to use as template", required=False)
 @pass_state
-def create_topic(state: State, topic_name: str):
+def create_topic(state: State, topic_name: str, like=None):
     if not ensure_approval("Are you sure?", no_verify=state.no_verify):
         click.echo("Aborted")
         return
 
     topic_controller = state.cluster.topic_controller
-    topic_controller.create_topics([Topic(topic_name)])
+    topic_controller.create_topics([Topic(topic_name)], template=like)
 
 
 @edit.command("topic")
